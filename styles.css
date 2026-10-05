@@ -364,6 +364,12 @@ a { color: inherit; }
 .project-cta .cta-arrow { transition: transform 0.2s; display: inline-block; }
 .project-cta:hover .cta-arrow { transform: translateX(6px); }
 .project-cta:hover { text-shadow: 0 0 14px rgba(45, 212, 191, 0.6); }
+.project-cta-live {
+  margin-left: 18px; padding: 8px 16px; border: 1px solid var(--accent);
+  border-radius: 8px; background: rgba(45, 212, 191, 0.08);
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.25);
+}
+.project-cta-live:hover { background: rgba(45, 212, 191, 0.16); text-shadow: none; }
 
 /* ---------- Demo: see it in action ---------- */
 .demo-wrap { margin-top: 56px; text-align: center; }

@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KubePilot Playground — Operate a Kubernetes Cluster Live</title>
+<meta name="description" content="Interactive KubePilot demo: operate a simulated Kubernetes cluster in real time — list pods, tail logs, scale deployments." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0b1220; --panel:#0f172a; --panel2:#111c33; --line:#1e2a45;
+    --teal:#2dd4bf; --teal-dim:#14b8a6; --text:#e2e8f0; --dim:#8fa1bd;
+    --faint:#5b6b8c; --green:#4ade80; --red:#f87171; --yellow:#fbbf24; --blue:#60a5fa;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:radial-gradient(1200px 600px at 20% -10%, #12233f 0%, var(--bg) 55%) fixed, var(--bg);
+    color:var(--text); font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh; padding:28px 16px 60px;
+    display:flex; justify-content:center;
+  }
+  .wrap{width:100%; max-width:980px;}
+  header.top{display:flex; align-items:center; gap:14px; margin-bottom:18px; flex-wrap:wrap;}
+  .logo{width:46px; height:46px; border-radius:12px; flex:0 0 auto;
+    background:linear-gradient(135deg,#0d9488,#2dd4bf);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:20px; color:#062a26;
+    box-shadow:0 0 24px rgba(45,212,191,.35);}
+  .titleblock h1{font-size:22px; font-weight:700; letter-spacing:-.02em;}
+  .titleblock h1 span{color:var(--teal);}
+  .titleblock p{color:var(--dim); font-size:13px; margin-top:2px;}
+  .live{margin-left:auto; display:flex; align-items:center; gap:8px;
+    font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--green);
+    background:rgba(74,222,128,.08); border:1px solid rgba(74,222,128,.25);
+    padding:7px 12px; border-radius:999px;}
+  .live .dot{width:8px; height:8px; border-radius:50%; background:var(--green);
+    box-shadow:0 0 10px var(--green); animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+  .chip{font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--teal);
+    background:rgba(45,212,191,.07); border:1px solid rgba(45,212,191,.3);
+    padding:8px 14px; border-radius:999px; cursor:pointer; transition:all .15s;}
+  .chip:hover{background:rgba(45,212,191,.18); box-shadow:0 0 14px rgba(45,212,191,.25); transform:translateY(-1px);}
+  .chip:active{transform:translateY(0);}
+
+  .terminal{background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.45), 0 0 0 1px rgba(45,212,191,.06);}
+  .termbar{display:flex; align-items:center; gap:8px; padding:12px 16px;
+    background:var(--panel2); border-bottom:1px solid var(--line);}
+  .termbar .d{width:12px; height:12px; border-radius:50%;}
+  .d.r{background:#f87171}.d.y{background:#fbbf24}.d.g{background:#4ade80}
+  .termbar .t{margin-left:8px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--faint);}
+  .termbar .ns{margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--faint);}
+  .termbar .ns b{color:var(--teal); font-weight:500;}
+  #output{padding:18px 18px 8px; min-height:380px; max-height:62vh; overflow-y:auto;
+    font-family:'JetBrains Mono',monospace; font-size:13.5px; line-height:1.65;}
+  #output::-webkit-scrollbar{width:8px}
+  #output::-webkit-scrollbar-thumb{background:#243a5e;border-radius:4px}
+  .cmdline{color:var(--text); margin:10px 0 4px; word-break:break-all;}
+  .cmdline .p{color:var(--teal); font-weight:700; margin-right:8px;}
+  .envelope{color:var(--faint); font-size:12px; margin:2px 0 8px; word-break:break-all;}
+  .envelope .ok{color:var(--green);} .envelope .bad{color:var(--red);}
+  .out{margin:0 0 14px; color:#cbd5e1;}
+  .out table{width:100%; border-collapse:collapse; font-size:12.5px; margin:6px 0;}
+  .out th{text-align:left; color:var(--faint); font-weight:500; font-size:11px;
+    text-transform:uppercase; letter-spacing:.06em; padding:6px 10px 6px 0;
+    border-bottom:1px solid var(--line); white-space:nowrap;}
+  .out td{padding:6px 10px 6px 0; border-bottom:1px solid rgba(30,42,69,.5);
+    vertical-align:top; word-break:break-word;}
+  .out tr:last-child td{border-bottom:none;}
+  .st-run{color:var(--green);} .st-bad{color:var(--red); font-weight:700;} .st-warn{color:var(--yellow);}
+  .badge{display:inline-block; font-size:11px; padding:2px 9px; border-radius:999px; font-weight:700;}
+  .b-warn{background:rgba(251,191,36,.12); color:var(--yellow); border:1px solid rgba(251,191,36,.35);}
+  .b-ok{background:rgba(74,222,128,.1); color:var(--green); border:1px solid rgba(74,222,128,.3);}
+  .log{white-space:pre-wrap; word-break:break-all; background:#0a0f1d; border:1px solid var(--line);
+    border-radius:8px; padding:12px 14px; font-size:12.5px; line-height:1.7; margin:6px 0;}
+  .log .ts{color:var(--faint);} .log .err{color:var(--red);} .log .warn{color:var(--yellow);} .log .inf{color:#a5b4cf;}
+  .json{background:#0a0f1d; border:1px solid var(--line); border-radius:8px;
+    padding:12px 14px; font-size:12.5px; line-height:1.7; margin:6px 0;
+    white-space:pre-wrap; word-break:break-word;}
+  .jk{color:var(--teal);} .jstr{color:#a7f3d0;} .jnum{color:var(--yellow);} .jbool{color:var(--blue);}
+  .ev{display:flex; gap:10px; padding:7px 0; border-bottom:1px solid rgba(30,42,69,.5); font-size:12.5px;}
+  .ev:last-child{border-bottom:none;}
+  .ev .msg{color:#a5b4cf;} .ev .meta{color:var(--faint); font-size:11.5px;}
+  .ev .obj{color:var(--text);}
+  .okline{color:var(--green);} .errline{color:var(--red);}
+  .dimline{color:var(--dim);}
+  .helptable td:first-child{color:var(--teal); white-space:nowrap;}
+  .working{display:flex; align-items:center; gap:10px; color:var(--dim); margin:10px 0;}
+  .spinner{width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--teal);
+    border-radius:50%; animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .inputrow{display:flex; align-items:center; gap:10px; padding:14px 18px;
+    border-top:1px solid var(--line); background:var(--panel2);}
+  .inputrow .p{color:var(--teal); font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px;}
+  #cmd{flex:1; background:transparent; border:none; outline:none; color:var(--text);
+    font-family:'JetBrains Mono',monospace; font-size:16px; caret-color:var(--teal);}
+  #cmd::placeholder{color:var(--faint);}
+  footer{margin-top:16px; text-align:center; color:var(--faint); font-size:12.5px; line-height:1.7;}
+  footer a{color:var(--teal); text-decoration:none;}
+  footer a:hover{text-decoration:underline;}
+  footer .note{display:inline-block; background:rgba(45,212,191,.06); border:1px solid rgba(45,212,191,.2);
+    padding:8px 16px; border-radius:10px; margin-bottom:10px;}
+  @media (max-width:640px){
+    #output{font-size:12.5px; padding:14px 12px 6px; min-height:340px;}
+    .titleblock h1{font-size:18px;}
+    .out table{font-size:11.5px;}
+    .out th:nth-child(6),.out td:nth-child(6),
+    .out th:nth-child(7),.out td:nth-child(7){display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">k8s</div>
+    <div class="titleblock">
+      <h1>KubePilot <span>Playground</span></h1>
+      <p>Operate a live simulated Kubernetes cluster through KubePilot's real tool interface</p>
+    </div>
+    <div class="live"><span class="dot"></span>cluster: demo-1 · live</div>
+  </header>
+
+  <div class="chips" id="chips">
+    <button class="chip" data-c="list_pods namespace=production">▸ list pods</button>
+    <button class="chip" data-c="get_pod_logs pod_name=payments-worker-5b6a7d8c9f-t9w5x namespace=production tail_lines=12">▸ check crashloop logs</button>
+    <button class="chip" data-c="list_deployments namespace=production">▸ list deployments</button>
+    <button class="chip" data-c="scale_deployment name=checkout-api namespace=production replicas=5">▸ scale checkout-api → 5</button>
+    <button class="chip" data-c="get_events namespace=production limit=6">▸ show events</button>
+    <button class="chip" data-c="describe_resource kind=deployment name=checkout-api namespace=production">▸ describe deployment</button>
+    <button class="chip" data-c="help">▸ help</button>
+  </div>
+
+  <div class="terminal">
+    <div class="termbar">
+      <span class="d r"></span><span class="d y"></span><span class="d g"></span>
+      <span class="t">kubepilot — interactive playground</span>
+      <span class="ns">allow-list: <b>production, staging, default</b></span>
+    </div>
+    <div id="output" aria-live="polite"></div>
+    <div class="inputrow">
+      <span class="p">➜</span>
+      <input id="cmd" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+             placeholder="type a command or tap a chip above — try &quot;help&quot;" aria-label="command input" />
+    </div>
+  </div>
+
+  <footer>
+    <div class="note">Simulated cluster for demo purposes — the real KubePilot connects to live clusters via MCP.</div><br/>
+    <a href="https://github.com/anugantisaicharan-2122/Kubepilot" target="_blank" rel="noopener">View KubePilot on GitHub</a>
+    &nbsp;·&nbsp;
+    <a href="https://anugantisaicharan-2122.github.io/">← Back to portfolio</a>
+  </footer>
+</div>
+<script>
+"use strict";
+/* ============================================================
+   KubePilot Playground — faithful in-browser simulation of the
+   KubePilot MCP server's 6 tools against a simulated cluster.
+   Tool names, argument names and {"ok": ...} envelopes mirror
+   src/kubepilot/server.py exactly.
+   ============================================================ */
+
+const ALLOWED_NS = ["production", "staging", "default"];
+
+const INITIAL_STATE = {
+  deployments: {
+    production: [
+      { name: "checkout-api", desired: 3, ready: 3, updated: 3, available: 3,
+        images: ["registry.io/shop/checkout-api:2.14.1"], age: "12d", rs: "checkout-api-7d9f8c6b4" },
+      { name: "payments-worker", desired: 2, ready: 1, updated: 2, available: 1,
+        images: ["registry.io/shop/payments-worker:1.9.0"], age: "30d", rs: "payments-worker-5b6a7d8c9f" }
+    ],
+    staging: [
+      { name: "frontend", desired: 2, ready: 2, updated: 2, available: 2,
+        images: ["registry.io/shop/frontend:3.2.0"], age: "8d", rs: "frontend-6c8e9f0a1b" }
+    ],
+    default: []
+  },
+  pods: {
+    production: [
+      { name: "checkout-api-7d9f8c6b4-x2k4m", deploy: "checkout-api", phase: "Running", ready: "1/1", restarts: 0, age: "2d4h", ip: "10.244.1.12", node: "ip-10-0-1-42.ec2.internal" },
+      { name: "checkout-api-7d9f8c6b4-p7q9r", deploy: "checkout-api", phase: "Running", ready: "1/1", restarts: 1, age: "2d4h", ip: "10.244.2.8", node: "ip-10-0-2-17.ec2.internal" },
+      { name: "checkout-api-7d9f8c6b4-m3n8s", deploy: "checkout-api", phase: "Running", ready: "1/1", restarts: 0, age: "2d3h", ip: "10.244.1.19", node: "ip-10-0-1-42.ec2.internal" },
+      { name: "payments-worker-5b6a7d8c9f-h4j2k", deploy: "payments-worker", phase: "Running", ready: "1/1", restarts: 0, age: "5d2h", ip: "10.244.3.4", node: "ip-10-0-3-9.ec2.internal" },
+      { name: "payments-worker-5b6a7d8c9f-t9w5x", deploy: "payments-worker", phase: "CrashLoopBackOff", ready: "0/1", restarts: 14, age: "5d2h", ip: "10.244.3.11", node: "ip-10-0-3-9.ec2.internal" }
+    ],
+    staging: [
+      { name: "frontend-6c8e9f0a1b-q1w2e", deploy: "frontend", phase: "Running", ready: "1/1", restarts: 0, age: "1d6h", ip: "10.244.4.2", node: "ip-10-0-4-21.ec2.internal" },
+      { name: "frontend-6c8e9f0a1b-r3t4y", deploy: "frontend", phase: "Running", ready: "1/1", restarts: 0, age: "1d6h", ip: "10.244.5.7", node: "ip-10-0-5-33.ec2.internal" }
+    ],
+    default: [
+      { name: "debug-curl-9f8e7d6c5b-z1x2c", deploy: null, phase: "Running", ready: "1/1", restarts: 0, age: "3h22m", ip: "10.244.0.9", node: "ip-10-0-1-42.ec2.internal" }
+    ]
+  },
+  events: {
+    production: [
+      { type: "Warning", reason: "BackOff", object: "Pod/payments-worker-5b6a7d8c9f-t9w5x",
+        message: "Back-off restarting failed container payments-worker in pod payments-worker-5b6a7d8c9f-t9w5x_production(9a1c…)", count: 87, last_seen: "2m ago" },
+      { type: "Warning", reason: "Unhealthy", object: "Pod/payments-worker-5b6a7d8c9f-t9w5x",
+        message: "Liveness probe failed: dial tcp 10.244.3.11:8080: connect: connection refused", count: 42, last_seen: "4m ago" },
+      { type: "Normal", reason: "ScalingReplicaSet", object: "Deployment/checkout-api",
+        message: "Scaled up replica set checkout-api-7d9f8c6b4 to 3", count: 1, last_seen: "2d ago" },
+      { type: "Normal", reason: "SuccessfulCreate", object: "ReplicaSet/checkout-api-7d9f8c6b4",
+        message: "Created pod: checkout-api-7d9f8c6b4-x2k4m", count: 1, last_seen: "2d ago" },
+      { type: "Normal", reason: "Scheduled", object: "Pod/checkout-api-7d9f8c6b4-x2k4m",
+        message: "Successfully assigned production/checkout-api-7d9f8c6b4-x2k4m to ip-10-0-1-42.ec2.internal", count: 1, last_seen: "2d ago" },
+      { type: "Normal", reason: "Pulled", object: "Pod/checkout-api-7d9f8c6b4-x2k4m",
+        message: "Successfully pulled image \"registry.io/shop/checkout-api:2.14.1\"", count: 1, last_seen: "2d ago" }
+    ],
+    staging: [
+      { type: "Normal", reason: "ScalingReplicaSet", object: "Deployment/frontend",
+        message: "Scaled up replica set frontend-6c8e9f0a1b to 2", count: 1, last_seen: "1d ago" },
+      { type: "Normal", reason: "Started", object: "Pod/frontend-6c8e9f0a1b-q1w2e",
+        message: "Started container frontend", count: 1, last_seen: "1d ago" }
+    ],
+    default: [
+      { type: "Normal", reason: "Started", object: "Pod/debug-curl-9f8e7d6c5b-z1x2c",
+        message: "Started container curl", count: 1, last_seen: "3h ago" }
+    ]
+  }
+};
+
+const LOG_SETS = {
+  "checkout-api": [
+    ["2026-10-05T06:51:02Z", "inf", "INFO  request_id=9f31 method=POST path=/api/checkout status=200 latency_ms=138"],
+    ["2026-10-05T06:51:17Z", "inf", "INFO  request_id=9f32 method=GET  path=/api/cart     status=200 latency_ms=42"],
+    ["2026-10-05T06:52:44Z", "warn", "WARN  request_id=9f3a method=POST path=/api/checkout status=200 latency_ms=1840 slow_request=true"],
+    ["2026-10-05T06:53:01Z", "inf", "INFO  request_id=9f3b method=POST path=/api/checkout status=200 latency_ms=151"],
+    ["2026-10-05T06:54:29Z", "inf", "INFO  gc heap=412MB pause_ms=3"],
+    ["2026-10-05T06:55:10Z", "inf", "INFO  request_id=9f40 method=GET  path=/healthz      status=200 latency_ms=2"]
+  ],
+  "payments-worker-bad": [
+    ["2026-10-05T06:40:11Z", "inf", "INFO  starting worker id=7, consuming from queue 'payments'"],
+    ["2026-10-05T06:40:12Z", "err", "ERROR failed to connect to postgres: dial tcp db-primary:5432: connect: connection refused"],
+    ["2026-10-05T06:40:12Z", "inf", "INFO  retry 1/3 in 5s..."],
+    ["2026-10-05T06:40:17Z", "err", "ERROR failed to connect to postgres: dial tcp db-primary:5432: connect: connection refused"],
+    ["2026-10-05T06:40:17Z", "err", "FATAL worker exiting: could not establish database connection"]
+  ],
+  "payments-worker": [
+    ["2026-10-05T06:58:02Z", "inf", "INFO  consumed job id=88121 type=charge amount_cents=4999"],
+    ["2026-10-05T06:58:03Z", "inf", "INFO  job id=88121 settled in 812ms"],
+    ["2026-10-05T06:58:19Z", "inf", "INFO  consumed job id=88122 type=refund amount_cents=1299"],
+    ["2026-10-05T06:58:20Z", "inf", "INFO  job id=88122 settled in 640ms"]
+  ],
+  "frontend": [
+    ["2026-10-05T06:59:01Z", "inf", "10.244.4.2 - - [05/Oct/2026:06:59:01 +0000] \"GET / HTTP/1.1\" 200 4123"],
+    ["2026-10-05T06:59:14Z", "inf", "10.244.4.2 - - [05/Oct/2026:06:59:14 +0000] \"GET /static/app.js HTTP/1.1\" 200 88210"],
+    ["2026-10-05T06:59:31Z", "inf", "10.244.4.2 - - [05/Oct/2026:06:59:31 +0000] \"GET /api/config HTTP/1.1\" 200 312"]
+  ],
+  "debug": [
+    ["2026-10-05T06:57:44Z", "inf", "sleep infinity — waiting for your kubectl exec"]
+  ]
+};
+
+let cluster = structuredClone(INITIAL_STATE);
+
+/* ---------------- helpers ---------------- */
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function rand5(){ const c="abcdefghijklmnopqrstuvwxyz0123456789"; let s=""; for(let i=0;i<5;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
+
+function hljson(obj){
+  // NB: esc() runs first, so strings appear as &quot;…&quot; — match those.
+  let json = esc(JSON.stringify(obj, null, 2));
+  return json.replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;\s*:?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    function(m){
+      let cls = "jnum";
+      if (/^&quot;/.test(m)) cls = /:\s*$/.test(m) ? "jk" : "jstr";
+      else if (/^(true|false|null)$/.test(m)) cls = "jbool";
+      return '<span class="'+cls+'">'+m+'</span>';
+    });
+}
+
+function phaseClass(p){
+  if (p === "Running") return "st-run";
+  if (p === "Pending") return "st-warn";
+  return "st-bad";
+}
+
+function nsError(ns){
+  return { ok:false,
+    envelope: JSON.stringify({ok:false, error:"namespace '"+ns+"' is not in KUBEPILOT_ALLOWED_NAMESPACES ("+ALLOWED_NS.join(", ")+")"}),
+    html: '<div class="out"><span class="errline">✕ namespace \''+esc(ns)+'\' is not in KUBEPILOT_ALLOWED_NAMESPACES ('+ALLOWED_NS.join(", ")+')</span><br><span class="dimline">This playground simulates KubePilot\'s namespace allow-list safety guard.</span></div>' };
+}
+function checkNs(ns){
+  if (!ALLOWED_NS.includes(ns)) return nsError(ns);
+  return null;
+}
+function findPod(name, ns){
+  const list = cluster.pods[ns] || [];
+  return list.find(p => p.name === name) || null;
+}
+function findPodAnywhere(name){
+  for (const ns of ALLOWED_NS){
+    const p = findPod(name, ns);
+    if (p) return {pod:p, ns};
+  }
+  return null;
+}
+function findDeployment(name, ns){
+  return (cluster.deployments[ns] || []).find(d => d.name === name) || null;
+}
+function logsFor(pod){
+  const n = pod.name;
+  if (n.includes("payments-worker") && pod.phase !== "Running") return LOG_SETS["payments-worker-bad"];
+  if (n.includes("payments-worker")) return LOG_SETS["payments-worker"];
+  if (n.includes("checkout-api")) return LOG_SETS["checkout-api"];
+  if (n.includes("frontend")) return LOG_SETS["frontend"];
+  return LOG_SETS["debug"];
+}
+
+/* ---------------- the 6 KubePilot tools (simulated) ---------------- */
+const TOOLS = {
+  list_pods(args){
+    const ns = args.namespace || "default";
+    const denied = checkNs(ns); if (denied) return denied;
+    let pods = cluster.pods[ns] || [];
+    if (args.label_selector){
+      const m = args.label_selector.match(/app=([a-z0-9-]+)/);
+      if (m) pods = pods.filter(p => (p.deploy||"").startsWith(m[1]) || p.name.includes(m[1]));
+    }
+    const rows = pods.map(p =>
+      `<tr><td>${esc(p.name)}</td><td class="${phaseClass(p.phase)}">${esc(p.phase)}</td>`+
+      `<td>${esc(p.ready)}</td><td>${p.restarts}</td><td>${esc(p.age)}</td><td>${esc(p.ip)}</td><td>${esc(p.node)}</td></tr>`
+    ).join("");
+    const html = pods.length
+      ? `<div class="out"><table><tr><th>Name</th><th>Phase</th><th>Ready</th><th>Restarts</th><th>Age</th><th>IP</th><th>Node</th></tr>${rows}</table></div>`
+      : `<div class="out"><span class="dimline">No pods found in namespace '${esc(ns)}'.</span></div>`;
+    return { ok:true,
+      envelope: JSON.stringify({ok:true, namespace:ns, count:pods.length}),
+      html };
+  },
+
+  get_pod_logs(args){
+    if (!args.pod_name)
+      return { ok:false, envelope: JSON.stringify({ok:false, error:"pod_name is required"}),
+        html: '<div class="out"><span class="errline">✕ pod_name is required</span><br><span class="dimline">usage: get_pod_logs pod_name=&lt;name&gt; [namespace=&lt;ns&gt;] [tail_lines=&lt;n&gt;]</span></div>' };
+    const ns = args.namespace || "default";
+    const denied = checkNs(ns); if (denied) return denied;
+    const pod = findPod(args.pod_name, ns);
+    if (!pod)
+      return { ok:false, envelope: JSON.stringify({ok:false, error:'pods "'+args.pod_name+'" not found'}),
+        html: `<div class="out"><span class="errline">✕ pods "${esc(args.pod_name)}" not found in namespace '${esc(ns)}'</span></div>` };
+    const tail = Math.max(1, Math.min(parseInt(args.tail_lines||"100",10)||100, 200));
+    const lines = logsFor(pod).slice(-tail).map(([ts, cls, msg]) =>
+      `<span class="ts">${esc(ts)}</span> <span class="${cls}">${esc(msg)}</span>`
+    ).join("\n");
+    return { ok:true,
+      envelope: JSON.stringify({ok:true, pod:pod.name, tail_lines:tail}),
+      html: `<div class="out"><div class="dimline" style="margin-bottom:6px">pod <b style="color:var(--text)">${esc(pod.name)}</b> · container (default) · last ${tail} lines</div><div class="log">${lines}</div></div>` };
+  },
+
+  list_deployments(args){
+    const ns = args.namespace || "default";
+    const denied = checkNs(ns); if (denied) return denied;
+    const deps = cluster.deployments[ns] || [];
+    const rows = deps.map(d =>
+      `<tr><td><b>${esc(d.name)}</b><br><span class="dimline" style="font-size:11px">${esc(d.images.join(", "))}</span></td>`+
+      `<td>${d.desired}</td><td>${d.ready}</td><td>${d.updated}</td><td>${d.available}</td><td>${esc(d.age)}</td></tr>`
+    ).join("");
+    const html = deps.length
+      ? `<div class="out"><table><tr><th>Name</th><th>Desired</th><th>Ready</th><th>Up-to-date</th><th>Available</th><th>Age</th></tr>${rows}</table></div>`
+      : `<div class="out"><span class="dimline">No deployments found in namespace '${esc(ns)}'.</span></div>`;
+    return { ok:true,
+      envelope: JSON.stringify({ok:true, namespace:ns, count:deps.length}),
+      html };
+  },
+
+  get_events(args){
+    const ns = args.namespace || "default";
+    const denied = checkNs(ns); if (denied) return denied;
+    const limit = Math.max(1, Math.min(parseInt(args.limit||"50",10)||50, 200));
+    const evs = (cluster.events[ns] || []).slice(0, limit);
+    const rows = evs.map(e =>
+      `<div class="ev"><span class="badge ${e.type==="Warning"?"b-warn":"b-ok"}">${e.type}</span>`+
+      `<div><span class="obj">${esc(e.object)}</span> <span class="dimline">· ${esc(e.reason)}</span><br>`+
+      `<span class="msg">${esc(e.message)}</span><br>`+
+      `<span class="meta">count: ${e.count} · last seen ${esc(e.last_seen)}</span></div></div>`
+    ).join("");
+    return { ok:true,
+      envelope: JSON.stringify({ok:true, namespace:ns, count:evs.length}),
+      html: `<div class="out">${rows || `<span class="dimline">No events in namespace '${esc(ns)}'.</span>`}</div>` };
+  },
+
+  describe_resource(args){
+    const kinds = ["pod","deployment","service","configmap","namespace","node"];
+    const kind = (args.kind||"").toLowerCase();
+    if (!kinds.includes(kind))
+      return { ok:false, envelope: JSON.stringify({ok:false, error:"unsupported kind '"+args.kind+"'; expected one of: "+kinds.slice().sort().join(", ")}),
+        html: '<div class="out"><span class="errline">✕ unsupported kind \''+esc(args.kind||"")+'\'</span><br><span class="dimline">expected one of: '+kinds.slice().sort().join(", ")+'</span></div>' };
+    if (!args.name)
+      return { ok:false, envelope: JSON.stringify({ok:false, error:"name is required"}),
+        html: '<div class="out"><span class="errline">✕ name is required</span></div>' };
+    const ns = args.namespace || "default";
+    if (!["namespace","node"].includes(kind)){ const denied = checkNs(ns); if (denied) return denied; }
+
+    let manifest = null;
+    if (kind === "deployment"){
+      const d = findDeployment(args.name, ns);
+      if (!d) return { ok:false, envelope: JSON.stringify({ok:false, error:'deployments.apps "'+args.name+'" not found'}),
+        html: '<div class="out"><span class="errline">✕ deployments.apps "'+esc(args.name)+'" not found</span></div>' };
+      manifest = { apiVersion:"apps/v1", kind:"Deployment",
+        metadata:{ name:d.name, namespace:ns, labels:{app:d.name} },
+        spec:{ replicas:d.desired, selector:{matchLabels:{app:d.name}},
+          template:{ metadata:{labels:{app:d.name}},
+            spec:{ containers:[{ name:d.name, image:d.images[0], ports:[{containerPort:8080}],
+              resources:{ requests:{cpu:"250m",memory:"512Mi"}, limits:{cpu:"1000m",memory:"1Gi"} } }] } } },
+        status:{ replicas:d.desired, readyReplicas:d.ready, updatedReplicas:d.updated, availableReplicas:d.available } };
+    } else if (kind === "pod"){
+      const p = findPod(args.name, ns);
+      if (!p) return { ok:false, envelope: JSON.stringify({ok:false, error:'pods "'+args.name+'" not found'}),
+        html: '<div class="out"><span class="errline">✕ pods "'+esc(args.name)+'" not found</span></div>' };
+      manifest = { apiVersion:"v1", kind:"Pod",
+        metadata:{ name:p.name, namespace:ns, labels:p.deploy?{app:p.deploy}:{} },
+        spec:{ nodeName:p.node, containers:[{ name:p.deploy||"curl", image:"registry.io/shop/"+(p.deploy||"debug")+":latest" }] },
+        status:{ phase:p.phase, podIP:p.ip, containerStatuses:[{ ready:p.ready.startsWith("1"), restartCount:p.restarts }] } };
+    } else if (kind === "service"){
+      manifest = { apiVersion:"v1", kind:"Service",
+        metadata:{ name:args.name, namespace:ns },
+        spec:{ type:"ClusterIP", clusterIP:"10.96.42.17", ports:[{port:80, targetPort:8080}], selector:{app:args.name} } };
+    } else if (kind === "configmap"){
+      manifest = { apiVersion:"v1", kind:"ConfigMap",
+        metadata:{ name:args.name, namespace:ns },
+        data:{ "app.properties":"log.level=info\nfeature.flags=checkout-v2" } };
+    } else if (kind === "namespace"){
+      manifest = { apiVersion:"v1", kind:"Namespace", metadata:{ name:args.name }, status:{ phase:"Active" } };
+    } else {
+      manifest = { apiVersion:"v1", kind:"Node",
+        metadata:{ name:args.name, labels:{"kubernetes.io/os":"linux"} },
+        status:{ capacity:{cpu:"4", memory:"16384Mi"}, conditions:[{type:"Ready", status:"True"}] } };
+    }
+    return { ok:true,
+      envelope: JSON.stringify({ok:true, kind, name:args.name}),
+      html: `<div class="out"><div class="json">${hljson(manifest)}</div><div class="dimline" style="font-size:11.5px;margin-top:4px">manifest trimmed for readability — metadata.managedFields stripped, as in the real tool</div></div>` };
+  },
+
+  scale_deployment(args){
+    if (!args.name)
+      return { ok:false, envelope: JSON.stringify({ok:false, error:"name is required"}),
+        html: '<div class="out"><span class="errline">✕ name is required</span><br><span class="dimline">usage: scale_deployment name=&lt;deployment&gt; [namespace=&lt;ns&gt;] replicas=&lt;n&gt;</span></div>' };
+    const ns = args.namespace || "default";
+    const denied = checkNs(ns); if (denied) return denied;
+    const replicas = parseInt(args.replicas ?? "1", 10);
+    if (isNaN(replicas) || replicas < 0)
+      return { ok:false, envelope: JSON.stringify({ok:false, error:"replicas must be 0 or greater"}),
+        html: '<div class="out"><span class="errline">✕ replicas must be 0 or greater</span></div>' };
+    if (replicas > 10)
+      return { ok:false, envelope: JSON.stringify({ok:false, error:"replicas capped at 10 in this playground"}),
+        html: '<div class="out"><span class="errline">✕ replicas capped at 10 in this playground</span></div>' };
+    const d = findDeployment(args.name, ns);
+    if (!d)
+      return { ok:false, envelope: JSON.stringify({ok:false, error:'deployments.apps "'+args.name+'" not found'}),
+        html: `<div class="out"><span class="errline">✕ deployments.apps "${esc(args.name)}" not found in namespace '${esc(ns)}'</span></div>` };
+    const before = d.desired;
+    d.desired = d.ready = d.updated = d.available = replicas;
+    // keep pods in sync with the new replica count
+    const pods = cluster.pods[ns].filter(p => p.deploy === d.name);
+    if (replicas > pods.length){
+      for (let i = pods.length; i < replicas; i++){
+        cluster.pods[ns].push({ name: d.rs+"-"+rand5(), deploy: d.name, phase: "Running",
+          ready: "1/1", restarts: 0, age: "0s", ip: "10.244."+(1+Math.floor(Math.random()*5))+"."+(2+Math.floor(Math.random()*200)),
+          node: "ip-10-0-1-42.ec2.internal" });
+      }
+    } else if (replicas < pods.length){
+      let remove = pods.length - replicas;
+      for (let i = cluster.pods[ns].length - 1; i >= 0 && remove > 0; i--){
+        if (cluster.pods[ns][i].deploy === d.name){ cluster.pods[ns].splice(i,1); remove--; }
+      }
+    }
+    cluster.events[ns].unshift({ type:"Normal", reason:"ScalingReplicaSet",
+      object:"Deployment/"+d.name, message:"Scaled "+(replicas>before?"up":"down")+" replica set "+d.rs+" to "+replicas,
+      count:1, last_seen:"just now" });
+    const arrow = replicas > before ? "↑" : replicas < before ? "↓" : "=";
+    return { ok:true,
+      envelope: JSON.stringify({ok:true, deployment:d.name, replicas_before:before, replicas_after:replicas}),
+      html: `<div class="out"><span class="okline">✓ scaled ${esc(d.name)} ${arrow} ${before} → ${replicas} replicas</span><br><span class="dimline">pods and events updated — run <b>list_pods</b> or <b>list_deployments</b> to verify</span></div>` };
+  }
+};
+
+/* ---------------- command parsing ---------------- */
+function tokenize(s){
+  const out=[]; let cur="", q=null;
+  for (const ch of s){
+    if (q){ if (ch===q) q=null; else cur+=ch; }
+    else if (ch==='"' || ch==="'") q=ch;
+    else if (/\s/.test(ch)){ if (cur){ out.push(cur); cur=""; } }
+    else cur+=ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+function parseArgs(tokens){
+  const args={};
+  for (const t of tokens){
+    const i=t.indexOf("=");
+    if (i>0) args[t.slice(0,i).toLowerCase()]=t.slice(i+1);
+  }
+  return args;
+}
+function sniffNs(raw){
+  const m=raw.toLowerCase().match(/\b(production|staging|default)\b/);
+  return m ? m[1] : null;
+}
+function resolvePodRef(ref, nsHint){
+  // exact match first, then prefix match
+  const nss = nsHint ? [nsHint] : ALLOWED_NS;
+  for (const ns of nss){ const p=findPod(ref, ns); if (p) return {name:ref, ns}; }
+  for (const ns of nss){
+    const p=(cluster.pods[ns]||[]).find(p=>p.name.startsWith(ref));
+    if (p) return {name:p.name, ns};
+  }
+  return null;
+}
+
+function helpHtml(){
+  const rows=[
+    ["list_pods", "[namespace=..] [label_selector=..]", "List pods with phase, readiness, restarts, age"],
+    ["get_pod_logs", "pod_name=.. [namespace=..] [tail_lines=..]", "Tail a pod's container logs"],
+    ["list_deployments", "[namespace=..]", "List deployments with replica & image status"],
+    ["get_events", "[namespace=..] [limit=..]", "Recent cluster events, newest first"],
+    ["describe_resource", "kind=.. name=.. [namespace=..]", "Full manifest: pod, deployment, service, configmap, namespace, node"],
+    ["scale_deployment", "name=.. [namespace=..] replicas=..", "Change a deployment's replica count (mutating)"],
+  ].map(([t,a,d])=>`<tr><td><b>${t}</b></td><td class="dimline">${esc(a)}</td><td>${esc(d)}</td></tr>`).join("");
+  return `<div class="out">
+    <div style="margin-bottom:8px"><span class="okline">KubePilot tools</span> <span class="dimline">— same names &amp; arguments as the real MCP server. You can also speak naturally:</span></div>
+    <table class="helptable">${rows}</table>
+    <div class="dimline" style="margin-top:8px">natural examples: <b style="color:var(--teal)">show pods in production</b> · <b style="color:var(--teal)">logs for payments-worker</b> · <b style="color:var(--teal)">scale checkout-api to 5</b> · <b style="color:var(--teal)">what happened in staging</b></div>
+    <div class="dimline">playground extras: <b style="color:var(--teal)">clear</b> · <b style="color:var(--teal)">reset</b> (restore the cluster)</div>
+  </div>`;
+}
+
+async function execute(raw){
+  const input=raw.trim();
+  if (!input) return;
+  const tokens=tokenize(input);
+  const cmd=(tokens[0]||"").toLowerCase();
+  const args=parseArgs(tokens.slice(1));
+  const lc=input.toLowerCase();
+
+  // built-ins
+  if (cmd==="help"||cmd==="?") return {ok:true, envelope:'{"ok": true}', html:helpHtml()};
+  if (cmd==="clear"||cmd==="cls"){ document.getElementById("output").innerHTML=""; return null; }
+  if (cmd==="reset"){ cluster=structuredClone(INITIAL_STATE);
+    return {ok:true, envelope:'{"ok": true}', html:'<div class="out"><span class="okline">✓ cluster state reset to initial snapshot</span></div>'}; }
+
+  // direct tool calls
+  if (TOOLS[cmd]) return TOOLS[cmd](args);
+
+  // natural language
+  const nsSniffed=sniffNs(input);
+  let m;
+  if (m=lc.match(/^scale\s+([a-z0-9-]+)\s+(?:to\s+)?(\d+)/))
+    return TOOLS.scale_deployment({name:m[1], replicas:m[2], ...(nsSniffed?{namespace:nsSniffed}:{})});
+  if (m=lc.match(/^describe\s+(pod|deployment|service|configmap|namespace|node)\s+([a-z0-9-]+)/))
+    return TOOLS.describe_resource({kind:m[1], name:m[2], ...(nsSniffed?{namespace:nsSniffed}:{})});
+  if (/^(show|list|get)\s+pods?/.test(lc) || /^pods?\s+in\s+\w+/.test(lc))
+    return TOOLS.list_pods({...args, ...(nsSniffed?{namespace:nsSniffed}:{})});
+  if (/^(show|list|get)\s+deployments?/.test(lc))
+    return TOOLS.list_deployments({...args, ...(nsSniffed?{namespace:nsSniffed}:{})});
+  if (m=lc.match(/(?:logs?|tail)(?:\s+for|\s+of)?\s+([a-z0-9][a-z0-9-]*)/)){
+    const ref=resolvePodRef(m[1], nsSniffed);
+    if (!ref) return {ok:false, envelope:JSON.stringify({ok:false,error:'no pod matching "'+m[1]+'"'}),
+      html:'<div class="out"><span class="errline">✕ no pod matching "'+esc(m[1])+'"</span><br><span class="dimline">try <b style="color:var(--teal)">list_pods</b> to see available pods</span></div>'};
+    return TOOLS.get_pod_logs({pod_name:ref.name, namespace:ref.ns, ...args});
+  }
+  if (/events?/.test(lc) || /what happened/.test(lc))
+    return TOOLS.get_events({...args, ...(nsSniffed?{namespace:nsSniffed}:{})});
+
+  return {ok:false, envelope:JSON.stringify({ok:false,error:'unknown command "'+tokens[0]+'"'}),
+    html:'<div class="out"><span class="errline">✕ unknown command "'+esc(tokens[0]||"")+'"</span><br><span class="dimline">try <b style="color:var(--teal)">help</b> — or tap a command chip above</span></div>'};
+}
+
+/* ---------------- terminal UI ---------------- */
+const outEl=document.getElementById("output");
+const cmdEl=document.getElementById("cmd");
+const history=[]; let hIdx=-1;
+
+function scrollDown(){ outEl.scrollTop=outEl.scrollHeight; }
+function printCmd(input){
+  outEl.insertAdjacentHTML("beforeend",
+    `<div class="cmdline"><span class="p">➜</span>${esc(input)}</div>`);
+  scrollDown();
+}
+function printResult(res){
+  if (!res) return;
+  const envCls=res.ok?"ok":"bad";
+  outEl.insertAdjacentHTML("beforeend",
+    `<div class="envelope">→ <span class="${envCls}">${esc(res.envelope)}</span></div>${res.html}`);
+  scrollDown();
+}
+async function submitCommand(input){
+  const text=(input??cmdEl.value).trim();
+  if (!text) return;
+  history.push(text); hIdx=history.length;
+  cmdEl.value="";
+  printCmd(text);
+  const w=document.createElement("div");
+  w.className="working";
+  w.innerHTML='<span class="spinner"></span><span>contacting cluster…</span>';
+  outEl.appendChild(w); scrollDown();
+  await sleep(300+Math.random()*500);
+  let res;
+  try{ res=await execute(text); }
+  catch(e){ res={ok:false, envelope:JSON.stringify({ok:false,error:String(e&&e.message||e)}),
+    html:'<div class="out"><span class="errline">✕ '+esc(String(e&&e.message||e))+'</span></div>'}; }
+  w.remove();
+  printResult(res);
+}
+
+cmdEl.addEventListener("keydown", e=>{
+  if (e.key==="Enter"){ submitCommand(); }
+  else if (e.key==="ArrowUp"){ e.preventDefault(); if(history.length&&hIdx>0){hIdx--; cmdEl.value=history[hIdx];} }
+  else if (e.key==="ArrowDown"){ e.preventDefault(); if(hIdx<history.length-1){hIdx++; cmdEl.value=history[hIdx];} else {hIdx=history.length; cmdEl.value="";} }
+});
+document.querySelectorAll("#chips .chip").forEach(b=>{
+  b.addEventListener("click", ()=>submitCommand(b.dataset.c));
+});
+document.querySelector(".terminal").addEventListener("click", e=>{
+  if (e.target.id!=="cmd" && !e.target.closest(".chip")) cmdEl.focus();
+});
+
+/* ---------------- boot ---------------- */
+(async function boot(){
+  const lines=[
+    ["KubePilot Playground <span class='dimline'>v1.0</span>", 150],
+    ["<span class='okline'>✓</span> connected to cluster <b>\"demo-1\"</b> <span class='dimline'>(simulated)</span>", 350],
+    ["<span class='okline'>✓</span> namespace allow-list: <b>production, staging, default</b>", 300],
+    ["<span class='okline'>✓</span> 6 tools registered · <span class='dimline'>read-write mode (scaling enabled)</span>", 300],
+    ["<span class='dimline'>Type <b style='color:var(--teal)'>help</b> to list tools, speak naturally, or tap a command chip above.</span>", 250],
+  ];
+  for (const [html, d] of lines){
+    await sleep(d);
+    outEl.insertAdjacentHTML("beforeend", `<div class="out" style="margin-bottom:2px">${html}</div>`);
+    scrollDown();
+  }
+  // auto-run a first command so visitors instantly see it work
+  await sleep(500);
+  submitCommand("list_pods namespace=production");
+})();
+
+/* test hook (harmless in production) */
+window.KubePilotPlayground={ run:submitCommand, parse:tokenize, state:()=>cluster, tools:Object.keys(TOOLS) };
+</script>
+</body>
+</html>
