@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KubePilot — live demo</title>
+<style>
+  :root {
+    --bg: #0a1224;
+    --panel: #0d1730;
+    --line: rgba(148, 178, 226, 0.14);
+    --text: #e8eefb;
+    --muted: #8ea3c7;
+    --dim: #5b6b8c;
+    --accent: #2dd4bf;
+    --green: #4ade80;
+    --amber: #febc2e;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    font-family: var(--mono);
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px; overflow: hidden;
+  }
+  .terminal {
+    width: 100%; max-width: 720px;
+    background: linear-gradient(180deg, var(--panel), var(--bg));
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.5), 0 0 44px rgba(45,212,191,.07);
+    overflow: hidden; display: flex; flex-direction: column;
+    max-height: 100%;
+  }
+  .term-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+    background: rgba(255,255,255,.02); flex: none;
+  }
+  .term-dots { display: flex; gap: 7px; }
+  .term-dots i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .term-dots i:nth-child(1) { background: #ff5f57; }
+  .term-dots i:nth-child(2) { background: #febc2e; }
+  .term-dots i:nth-child(3) { background: #28c840; }
+  .term-title { font-size: .74rem; color: var(--muted); flex: 1; text-align: center; }
+  .term-live {
+    font-size: .66rem; color: var(--accent);
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid rgba(45,212,191,.35); border-radius: 999px; padding: 2px 10px;
+  }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .term-body {
+    font-size: .78rem; line-height: 1.7;
+    padding: 16px 18px 20px; color: #c9d6ec;
+    white-space: pre-wrap; word-break: break-word;
+    overflow-y: auto; min-height: 380px; max-height: 62vh;
+  }
+  .tl { display: block; }
+  .tl + .tl { margin-top: 2px; }
+  .p { color: var(--accent); font-weight: 600; margin-right: 8px; }
+  .cmd { color: var(--text); }
+  .out { color: var(--muted); }
+  .hi { color: var(--accent); }
+  .ok { color: var(--green); }
+  .dim { color: var(--dim); }
+  .warn { color: var(--amber); }
+  .jk { color: #9fb4dd; }          /* json key */
+  .js { color: #7ee8d3; }          /* json string */
+  .jn { color: #f0b35e; }          /* json number */
+  .jb { color: #c792ea; }          /* json bool */
+  .cursor {
+    display: inline-block; width: 8px; height: 1.1em; vertical-align: text-bottom;
+    background: var(--accent); margin-left: 2px; animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .gap { height: 10px; display: block; }
+  @media (max-width: 560px) {
+    .term-body { font-size: .68rem; min-height: 340px; }
+    .term-title { font-size: .66rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot, .cursor { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="terminal" role="img" aria-label="Animated demo of KubePilot: an AI agent lists pods, tails logs, checks deployments and scales a deployment through KubePilot's MCP tools.">
+    <div class="term-bar">
+      <span class="term-dots"><i></i><i></i><i></i></span>
+      <span class="term-title">kubepilot — demo</span>
+      <span class="term-live"><span class="live-dot"></span>demo</span>
+    </div>
+    <div class="term-body" id="termBody"></div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+  var body = document.getElementById("termBody");
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Tiny JSON syntax highlighter for the mock tool outputs */
+  function hl(json) {
+    return json
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*")(\s*:)?/g, function (m, str, _e, colon) {
+        var cls = colon ? "jk" : "js";
+        return '<span class="' + cls + '">' + str + "</span>" + (colon || "");
+      })
+      .replace(/\b(true|false|null)\b/g, '<span class="jb">$1</span>')
+      .replace(/(^|[\s\[,:])(-?\d+\.?\d*)/g, '$1<span class="jn">$2</span>');
+  }
+
+  /* Demo script: each step is typed or printed, then we move on */
+  var steps = [
+    { t: "cmd", text: "kubepilot" },
+    { t: "out", html: '<span class="dim">2026-10-05 03:10:01 INFO [kubepilot] namespace allow-list: production, staging</span>' },
+    { t: "out", html: '<span class="dim">2026-10-05 03:10:01 INFO [kubepilot] starting KubePilot MCP server (stdio transport)</span>' },
+    { t: "out", html: '<span class="ok">✓ 6 tools registered</span> <span class="dim">— ready for agent connections</span>' },
+    { t: "gap" },
+
+    { t: "cmd", text: "agent → list_pods(namespace=\"production\")" },
+    { t: "out", html: hl('{"ok": true, "namespace": "production", "count": 3, "pods": [') },
+    { t: "out", html: hl('  {"name": "checkout-api-7d9f8b6c5-x2m4k", "phase": "Running", "ready": "1/1", "restarts": 0, "age": "2d4h"},') },
+    { t: "out", html: hl('  {"name": "checkout-api-7d9f8b6c5-p9q3r", "phase": "Running", "ready": "1/1", "restarts": 1, "age": "2d4h"},') },
+    { t: "out", html: hl('  {"name": "checkout-worker-5c6a7d8e9-m1n2b", "phase": "Running", "ready": "1/1", "restarts": 0, "age": "5d2h"}]}') },
+    { t: "gap" },
+
+    { t: "cmd", text: "agent → get_pod_logs(pod_name=\"checkout-api-7d9f8b6c5-x2m4k\", tail_lines=3)" },
+    { t: "out", html: hl('{"ok": true, "pod": "checkout-api-7d9f8b6c5-x2m4k", "tail_lines": 3,') },
+    { t: "out", html: '  <span class="jk">"logs"</span>: <span class="js">"INFO  request completed path=/checkout latency_ms=812\\nWARN  latency p99 above SLO (750ms)\\nINFO  autoscale check: cpu 82% — consider adding replicas"</span>}' },
+    { t: "gap" },
+
+    { t: "cmd", text: "agent → list_deployments(namespace=\"production\")" },
+    { t: "out", html: hl('{"ok": true, "count": 2, "deployments": [') },
+    { t: "out", html: hl('  {"name": "checkout-api", "replicas": {"desired": 2, "ready": 2, "available": 2}},') },
+    { t: "out", html: hl('  {"name": "checkout-worker", "replicas": {"desired": 3, "ready": 3, "available": 3}}]}') },
+    { t: "gap" },
+
+    { t: "cmd", text: "agent → scale_deployment(name=\"checkout-api\", namespace=\"production\", replicas=4)" },
+    { t: "out", html: hl('{"ok": true, "deployment": "checkout-api", "replicas_before": 2, "replicas_after": 4}') },
+    { t: "gap" },
+
+    { t: "out", html: '<span class="ok">✓ checkout-api scaled 2 → 4 replicas</span> <span class="dim">— latency recovering</span>' },
+    { t: "out", html: '<span class="hi">KubePilot</span> <span class="dim">· typed tools · safety guardrails · AI agents for Kubernetes</span>' },
+    { t: "pause", ms: 4200 }
+  ];
+
+  var TYPE_MS = 34;      /* ms per char when typing commands */
+  var OUT_MS = 130;      /* ms between output lines */
+  var cursor = document.createElement("span");
+  cursor.className = "cursor";
+
+  function scrollDown() { body.scrollTop = body.scrollHeight; }
+
+  function line(html, cls) {
+    var div = document.createElement("span");
+    div.className = "tl" + (cls ? " " + cls : "");
+    div.innerHTML = html;
+    body.appendChild(div);
+    scrollDown();
+    return div;
+  }
+
+  function typeCommand(text) {
+    return new Promise(function (resolve) {
+      var div = line('<span class="p">$</span><span class="cmd"></span>');
+      var target = div.querySelector(".cmd");
+      target.appendChild(cursor);
+      var i = 0;
+      if (reduced) { target.textContent = text; cursor.remove(); resolve(); return; }
+      (function tick() {
+        if (i < text.length) {
+          target.insertBefore(document.createTextNode(text[i++]), cursor);
+          scrollDown();
+          setTimeout(tick, TYPE_MS + Math.random() * 30);
+        } else {
+          setTimeout(function () { cursor.remove(); resolve(); }, 260);
+        }
+      })();
+    });
+  }
+
+  function printOut(html) {
+    return new Promise(function (resolve) {
+      line(html, "out");
+      setTimeout(resolve, reduced ? 0 : OUT_MS);
+    });
+  }
+
+  function wait(ms) {
+    return new Promise(function (r) { setTimeout(r, reduced ? 400 : ms); });
+  }
+
+  function runOnce() {
+    var p = Promise.resolve();
+    steps.forEach(function (s) {
+      if (s.t === "cmd") p = p.then(function () { return typeCommand(s.text); }).then(function () { return wait(200); });
+      else if (s.t === "out") p = p.then(function () { return printOut(s.html); });
+      else if (s.t === "gap") p = p.then(function () { line("", "gap"); return wait(160); });
+      else if (s.t === "pause") p = p.then(function () { return wait(s.ms); });
+    });
+    return p;
+  }
+
+  function loop() {
+    runOnce().then(function () {
+      return wait(600);
+    }).then(function () {
+      /* wipe and restart for a seamless loop */
+      body.innerHTML = "";
+      scrollDown();
+      return wait(500);
+    }).then(loop);
+  }
+
+  loop();
+})();
+</script>
+</body>
+</html>

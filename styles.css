@@ -365,6 +365,34 @@ a { color: inherit; }
 .project-cta:hover .cta-arrow { transform: translateX(6px); }
 .project-cta:hover { text-shadow: 0 0 14px rgba(45, 212, 191, 0.6); }
 
+/* ---------- Demo: see it in action ---------- */
+.demo-wrap { margin-top: 56px; text-align: center; }
+.demo-label {
+  font-family: var(--mono); font-size: 0.85rem; color: var(--accent);
+  margin-bottom: 10px;
+}
+.demo-label .t-prompt { color: var(--accent); font-weight: 600; margin-right: 8px; }
+.demo-title { font-size: 1.7rem; margin-bottom: 8px; }
+.demo-sub { color: var(--muted); font-size: 0.95rem; max-width: 560px; margin: 0 auto 24px; }
+.demo-frame {
+  max-width: 760px; margin: 0 auto;
+  border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), 0 0 44px rgba(45, 212, 191, 0.08);
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.demo-frame:hover {
+  border-color: rgba(45, 212, 191, 0.5);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), 0 0 60px rgba(45, 212, 191, 0.16);
+}
+.demo-frame iframe {
+  display: block; width: 100%; height: 520px; border: 0;
+  background: #0a1224;
+}
+@media (max-width: 640px) {
+  .demo-frame iframe { height: 480px; }
+  .demo-title { font-size: 1.4rem; }
+}
+
 .projects-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .project-card {
   background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius);
