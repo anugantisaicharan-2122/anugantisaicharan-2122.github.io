@@ -92,6 +92,7 @@ a { color: inherit; }
   padding: 130px 0 0; overflow: hidden;
 }
 #net { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.85; }
+#webgl { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.9; }
 .hero-glow {
   position: absolute; inset: 0; pointer-events: none;
   background:
@@ -103,7 +104,29 @@ a { color: inherit; }
   position: relative; z-index: 1; width: 100%;
   display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 56px; align-items: center;
 }
-.hero-copy { min-width: 0; }
+.hero-copy { min-width: 0; position: relative; }
+
+/* Floating 3D wireframe cube ornament */
+.cube-scene {
+  position: absolute; top: -8px; right: 4px;
+  width: 58px; height: 58px; perspective: 420px;
+  animation: cubeBob 6s ease-in-out infinite;
+}
+@keyframes cubeBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.cube { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; animation: cubeSpin 16s linear infinite; }
+.cube .face {
+  position: absolute; inset: 0;
+  border: 1.5px solid rgba(45, 212, 191, 0.6);
+  background: rgba(45, 212, 191, 0.05);
+  box-shadow: inset 0 0 12px rgba(45, 212, 191, 0.12);
+}
+.cube .f-front { transform: translateZ(29px); }
+.cube .f-back { transform: rotateY(180deg) translateZ(29px); }
+.cube .f-right { transform: rotateY(90deg) translateZ(29px); }
+.cube .f-left { transform: rotateY(-90deg) translateZ(29px); }
+.cube .f-top { transform: rotateX(90deg) translateZ(29px); }
+.cube .f-bottom { transform: rotateX(-90deg) translateZ(29px); }
+@keyframes cubeSpin { from { transform: rotateX(-20deg) rotateY(0deg); } to { transform: rotateX(-20deg) rotateY(360deg); } }
 
 .badge {
   display: inline-flex; align-items: center; gap: 10px;
@@ -311,6 +334,11 @@ a { color: inherit; }
   transform-style: preserve-3d; will-change: transform;
 }
 .project-featured:hover { border-color: rgba(45, 212, 191, 0.65); box-shadow: 0 26px 70px rgba(0, 0, 0, 0.5), 0 0 60px rgba(45, 212, 191, 0.16); }
+/* 3D depth layers — activated while JS tilt is engaged */
+.pf-media, .pf-body { transition: transform 0.35s ease; }
+.project-featured.tilting .pf-media { transform: translateZ(38px); }
+.project-featured.tilting .pf-body { transform: translateZ(20px); }
+.project-featured.tilting .pf-badge { transform: translateZ(70px); }
 .pf-media { position: relative; min-height: 300px; overflow: hidden; }
 .pf-media img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.5s ease; }
 .project-featured:hover .pf-media img { transform: scale(1.04); }
@@ -320,6 +348,7 @@ a { color: inherit; }
   color: #052a25; background: var(--accent);
   padding: 5px 14px; border-radius: 999px;
   box-shadow: 0 0 20px rgba(45, 212, 191, 0.55);
+  transition: transform 0.35s ease;
 }
 .pf-body { padding: 38px 40px; display: flex; flex-direction: column; gap: 16px; justify-content: center; }
 .pf-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -340,9 +369,17 @@ a { color: inherit; }
 .project-card {
   background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius);
   padding: 28px; display: flex; flex-direction: column; gap: 14px; opacity: 0.9;
-  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s, opacity 0.25s;
+  transition: border-color 0.25s, transform 0.3s ease, box-shadow 0.25s, opacity 0.25s;
+  transform-style: preserve-3d;
 }
-.project-card:hover { border-color: rgba(45, 212, 191, 0.45); border-style: solid; transform: translateY(-5px); box-shadow: var(--glow); opacity: 1; }
+.project-card:hover {
+  border-color: rgba(45, 212, 191, 0.45); border-style: solid;
+  transform: perspective(900px) rotateX(2.5deg) translateY(-6px);
+  box-shadow: var(--glow); opacity: 1;
+}
+.project-card .project-badge, .project-card h3 { transition: transform 0.3s ease; }
+.project-card:hover .project-badge { transform: translateZ(34px); }
+.project-card:hover h3 { transform: translateZ(22px); }
 .project-top { display: flex; align-items: center; justify-content: space-between; }
 .project-badge {
   font-family: var(--mono); font-size: 0.72rem; font-weight: 500;
@@ -468,6 +505,7 @@ footer p { color: var(--muted); font-size: 0.88rem; }
   .status-right { margin-left: 0; }
   .pf-body { padding: 26px 24px; }
   .term-body { font-size: 0.78rem; min-height: 320px; }
+  .cube-scene { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -298,8 +298,12 @@
         raf = null;
       });
     });
+    card.addEventListener('mouseenter', function () {
+      card.classList.add('tilting');
+    });
     card.addEventListener('mouseleave', function () {
       card.style.transform = '';
+      card.classList.remove('tilting');
     });
   }
 
@@ -371,4 +375,123 @@
       if (running) frame();
     });
   }
+
+  /* ============ Hero Three.js 3D wireframe background ============
+     Slowly rotating wireframe shapes in teal tones behind the
+     particle canvas. Disabled on small screens, save-data, and
+     reduced-motion. Fails silently if WebGL/CDN unavailable. */
+  (function hero3D() {
+    var canvas = document.getElementById('webgl');
+    if (!canvas || reduceMotion) return;
+    if (window.matchMedia('(max-width: 720px)').matches) return;
+    if (navigator.connection && navigator.connection.saveData) return;
+
+    function boot() {
+      if (typeof THREE === 'undefined') return;
+      var renderer;
+      try {
+        renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+      } catch (e) { return; }
+      if (!renderer.getContext()) return;
+
+      var hero = document.querySelector('.hero');
+      var scene = new THREE.Scene();
+      var camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+      camera.position.set(0, 0, 9);
+
+      var group = new THREE.Group();
+      scene.add(group);
+
+      function wire(geo, color, opacity) {
+        var mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+          color: color, wireframe: true, transparent: true, opacity: opacity
+        }));
+        group.add(mesh);
+        return mesh;
+      }
+      var ico = wire(new THREE.IcosahedronGeometry(1.7, 1), 0x2dd4bf, 0.20);
+      var knot = wire(new THREE.TorusKnotGeometry(1.05, 0.32, 90, 12), 0x38bdf8, 0.14);
+      var octa = wire(new THREE.OctahedronGeometry(0.7, 0), 0x2dd4bf, 0.22);
+
+      function layout() {
+        var w = hero.clientWidth || window.innerWidth;
+        var h = hero.clientHeight || window.innerHeight;
+        var aspect = w / Math.max(h, 1);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        renderer.setSize(w, h, false);
+        camera.aspect = aspect;
+        camera.updateProjectionMatrix();
+        var squeeze = aspect < 1.15 ? 0.42 : 1; // keep shapes at edges on narrow viewports
+        ico.position.set(-4.6 * squeeze, 0.7, -2);
+        knot.position.set(4.7 * squeeze, -0.6, -3);
+        octa.position.set(3.3 * squeeze, 2.0, -1.5);
+      }
+      layout();
+      window.addEventListener('resize', layout);
+
+      // mouse parallax (lerped)
+      var mx = 0, my = 0, tx = 0, ty = 0;
+      hero.addEventListener('mousemove', function (e) {
+        var r = hero.getBoundingClientRect();
+        tx = ((e.clientX - r.left) / r.width - 0.5) * 2;
+        ty = ((e.clientY - r.top) / r.height - 0.5) * 2;
+      });
+      hero.addEventListener('mouseleave', function () { tx = 0; ty = 0; });
+
+      var visible = true, running = true;
+      var clock = new THREE.Clock();
+      function frame() {
+        if (!running) return;
+        requestAnimationFrame(frame);
+        if (!visible) return;
+        var dt = Math.min(clock.getDelta(), 0.05);
+        var t = clock.elapsedTime;
+
+        ico.rotation.y += dt * 0.25;
+        ico.rotation.x += dt * 0.12;
+        knot.rotation.y -= dt * 0.18;
+        knot.rotation.z += dt * 0.10;
+        octa.rotation.y += dt * 0.40;
+        octa.rotation.x -= dt * 0.20;
+
+        ico.position.y = 0.7 + Math.sin(t * 0.5) * 0.25;
+        knot.position.y = -0.6 + Math.sin(t * 0.4 + 1.3) * 0.30;
+        octa.position.y = 2.0 + Math.sin(t * 0.7 + 2.1) * 0.20;
+
+        mx += (tx - mx) * 0.04;
+        my += (ty - my) * 0.04;
+        group.rotation.y = mx * 0.35;
+        group.rotation.x = my * 0.22;
+
+        renderer.render(scene, camera);
+      }
+      frame();
+
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(function (entries) {
+          visible = entries[0].isIntersecting;
+        }).observe(hero);
+      }
+      document.addEventListener('visibilitychange', function () {
+        running = !document.hidden;
+        if (running) frame();
+      });
+    }
+
+    // load Three.js on demand (UMD build), with CDN fallback
+    function loadThree(srcs) {
+      var s = document.createElement('script');
+      s.src = srcs[0];
+      s.onload = function () { boot(); };
+      s.onerror = function () {
+        if (srcs.length > 1) loadThree(srcs.slice(1));
+        // else: stay silent, hero still looks complete without 3D
+      };
+      document.head.appendChild(s);
+    }
+    loadThree([
+      'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.149.0/three.min.js',
+      'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js'
+    ]);
+  })();
 })();
